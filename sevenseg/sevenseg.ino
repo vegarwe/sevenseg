@@ -70,6 +70,7 @@ void setup()
     }
 
     matrix.begin(0x70);
+    matrix.setBrightness(2);
 
     wifi_mqtt_setup(debugger, mqtt_on_message);
 
