@@ -1,7 +1,5 @@
 #include "wifi_mqtt.h"
 
-#include <HardwareSerial.h>
-//#include <MQTT.h>
 #include <WiFiClientSecure.h>
 
 #include "config.h"
@@ -12,10 +10,11 @@
 
 // WiFi and MQTT client
 static WiFiClientSecure net;
-static MQTTClient mqtt(384);
+MQTTClient mqtt(384);
 
 // Object used for debug output
-static HardwareSerial* debugger = NULL;
+static HardwareSerial*  debugger = NULL;
+static String           mqttPrefix;
 
 
 void wifi_loop()
@@ -75,8 +74,8 @@ void connectMqtt()
     int retries = 0;
     if (debugger) debugger->println("Connecting to MQTT");
 
-    //while (!mqtt.connect(MQTT_NAME) && retries < MQTT_MAX_RECONNECT_TRIES)
-    while (!mqtt.connect(MQTT_NAME, MQTT_USER, MQTT_PASS) && retries < MQTT_MAX_RECONNECT_TRIES)
+    auto macAddr = WiFi.macAddress();
+    while (!mqtt.connect(macAddr.c_str(), MQTT_USER, MQTT_PASS) && retries < MQTT_MAX_RECONNECT_TRIES)
     {
         if (debugger) debugger->print(".");
         delay(200);
@@ -98,18 +97,15 @@ void connectMqtt()
     // Allow some resources for the WiFi connection
     yield();
 
-    //mqtt.subscribe("/raiomremote/cmd/#");
-    //mqtt.subscribe("/raiomremote/api/#");
-    //mqtt.subscribe("sensor/values");
-    //mqtt.subscribe("AMSpub");
-    //mqtt.subscribe("boden/temperature/#");
-    //mqtt.subscribe("chirp/sonsor");
+    mqtt.subscribe(MQTT_ROOT "/control/down");
+    mqtt.subscribe(mqttPrefix + "/ota/down/#");
 }
 
 
-void wifi_mqtt_setup(HardwareSerial* dbg, MQTTClientCallbackSimple messageCb)
+void wifi_mqtt_setup(HardwareSerial* dbg, String topicPrefix, MQTTClientCallbackAdvanced messageCb)
 {
     debugger = dbg;
+    mqttPrefix = topicPrefix;
 
     // Setup Wifi
     WiFi.enableAP(false);
@@ -123,8 +119,8 @@ void wifi_mqtt_setup(HardwareSerial* dbg, MQTTClientCallbackSimple messageCb)
 
     // Setup MQTT
     mqtt.begin(MQTT_HOST, MQTT_PORT, net);
-    mqtt.onMessage(messageCb);
-    //connectMqtt();
+    mqtt.onMessageAdvanced(messageCb);
+    connectMqtt();
 }
 
 
@@ -135,15 +131,10 @@ bool wifi_mqtt_loop()
     delay(10); // <- fixes some issues with WiFi stability
 
     // Reconnect to WiFi and MQTT as needed
-    //if (!mqtt.connected()) {
-    //    connectMqtt();
-    //}
+    if (!mqtt.connected()) {
+        connectMqtt();
+    }
 
     return mqtt.connected();
 }
 
-
-bool wifi_mqtt_publish(String topic, String payload)
-{
-    return mqtt.publish(topic, payload);
-}
