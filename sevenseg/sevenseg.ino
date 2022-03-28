@@ -12,8 +12,6 @@
 #include "config.h"
 
 static const char* ntpServer = "pool.ntp.org"; // TODO: Move to config.h
-static const long  gmtOffset_sec = 1 * 3600;
-static const int   daylightOffset_sec = 0 * 3600;
 
 static HardwareSerial*  debugger = NULL;
 static String           mqttPrefix;
@@ -102,7 +100,9 @@ void setup()
     wifi_mqtt_setup(debugger, mqttPrefix, mqttMessageReceived);
     mqtt_ota_setup(debugger, mqttPrefix);
 
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    configTime(0, 0, ntpServer);
+    setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+    tzset();
 
     mqtt.publish(MQTT_ROOT "/control/up", "starting: " + WiFi.macAddress() + " 0x05");
 }
