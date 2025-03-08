@@ -141,6 +141,9 @@ void setup()
         debugger->println("7 Segment Backpack starting");
     }
 
+    // For NodeMCU the pins used are D21 for SDA and D22 for SCL, see Wire.cpp
+    // For Feather the pins used are D23 for SDA and D22 for SCL
+    //Serial.printf("TwoWire setup: SDA %u SCL %u\n", SDA, SCL);`
     matrix.begin(0x70);
     matrix.setBrightness(2);
 
