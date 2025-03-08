@@ -1,11 +1,12 @@
 #include <Arduino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_LEDBackpack.h>
-#include <time.h>
-#include <SPI.h>
-#include <Wire.h>
 #include <HardwareSerial.h>
+#include <RCSwitch.h>
+#include <SPI.h>
+#include <time.h>
 #include <WiFi.h>
+#include <Wire.h>
 
 #include "wifi_mqtt.h"
 #include "mqtt_ota.h"
@@ -17,6 +18,8 @@ static HardwareSerial*  debugger = NULL;
 static String           mqttPrefix;
 
 static Adafruit_7segment matrix = Adafruit_7segment();
+
+static RCSwitch         mySwitch;
 
 //--------------------------------------------------------------------------------
 void drawCurrentTime()
@@ -83,6 +86,51 @@ static void mqttMessageReceived(MQTTClient *client, char topicBuffer[], char pay
 
 
 //--------------------------------------------------------------------------------
+void lpd433_loop()
+{
+    static uint64_t      lastValue = 0;
+    static unsigned long lastStamp = 0;
+
+    if (mySwitch.available()) {
+        uint64_t recvValue = mySwitch.getReceivedValue();
+        unsigned long now = millis();
+
+        if (lastValue == recvValue && (now - lastStamp) < 1400)
+        {
+            //Serial.printf("Skipping lastStamp %lu now %lu, %lu\n", lastStamp, now, now - lastStamp);
+        }
+        else
+        {
+            if (debugger) {
+                debugger->printf("value: %08llx ", recvValue);
+                debugger->printf("bitlen: %d ",    mySwitch.getReceivedBitlength());
+                debugger->printf("delay:  %d ",    mySwitch.getReceivedDelay());
+                debugger->printf("proto:  %d\n",   mySwitch.getReceivedProtocol());
+            }
+
+            //if (debugger) {
+            //    unsigned int * timings = mySwitch.getReceivedRawdata();
+
+            //    for (int i = 0; i < mySwitch.getReceivedBitlength() * 2; i++) {
+            //        Serial.printf("%d,", timings[i]);
+            //    }
+            //    Serial.println();
+            //}
+
+            char hexValue[] = "0x123456789abcdef0";
+            snprintf(hexValue, sizeof(hexValue), "0x%08llx", recvValue);
+            mqtt.publish(mqttPrefix + "/lpd433/up", hexValue);
+        }
+
+        lastValue = recvValue;
+        lastStamp = now;
+
+        mySwitch.resetAvailable();
+    }
+}
+
+
+//--------------------------------------------------------------------------------
 void setup()
 {
     debugger = &Serial;
@@ -95,6 +143,9 @@ void setup()
 
     matrix.begin(0x70);
     matrix.setBrightness(2);
+
+    pinMode(19, INPUT);
+    mySwitch.enableReceive(digitalPinToInterrupt(19));
 
     mqttPrefix = String(MQTT_ROOT "/") + WiFi.macAddress();
     wifi_mqtt_setup(debugger, mqttPrefix, mqttMessageReceived);
@@ -114,6 +165,8 @@ void loop()
 
     wifi_mqtt_loop();
     mqtt_ota_loop(); // Will block once update starts
+
+    lpd433_loop();
 
     delay(10);
 }
